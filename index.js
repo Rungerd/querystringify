@@ -44,7 +44,7 @@ var stringifyPrimitive = function(v) {
 function querystring(query) {
   var parser = /([^=?&]+)=?([^&]*)/g
     , result = {}
-    , part;
+    , part, k, v;
 
   while (part = parser.exec(query)) {
     k = decode(part[1]);
