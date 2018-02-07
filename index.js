@@ -1,7 +1,5 @@
 'use strict';
 
-var has = Object.prototype.hasOwnProperty;
-
 /**
  * Decode a URI encoded string.
  *
@@ -12,6 +10,29 @@ var has = Object.prototype.hasOwnProperty;
 function decode(input) {
   return decodeURIComponent(input.replace(/\+/g, ' '));
 }
+
+// If obj.hasOwnProperty has been overridden, then calling
+// obj.hasOwnProperty(prop) will break.
+// See: https://github.com/joyent/node/issues/1707
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+var stringifyPrimitive = function(v) {
+  switch (typeof v) {
+    case 'string':
+      return v;
+
+    case 'boolean':
+      return v ? 'true' : 'false';
+
+    case 'number':
+      return isFinite(v) ? v : '';
+
+    default:
+      return '';
+  }
+};
 
 /**
  * Simple query string parser.
@@ -25,15 +46,26 @@ function querystring(query) {
     , result = {}
     , part;
 
+  while (part = parser.exec(query)) {
+    k = decode(part[1]);
+    v = decode(part[2]);
+    if (!hasOwnProperty(result, k)) {
+      result[k] = v;
+    } else if (Array.isArray(result[k])) {
+      result[k].push(v);
+    } else {
+      result[k] = [result[k], v];
+    }
+  }
   //
   // Little nifty parsing hack, leverage the fact that RegExp.exec increments
   // the lastIndex property so we can continue executing this loop until we've
   // parsed all results.
   //
-  for (;
-    part = parser.exec(query);
-    result[decode(part[1])] = decode(part[2])
-  );
+  // for (;
+  //   part = parser.exec(query);
+  //   result[decode(part[1])] = decode(part[2])
+  // );
 
   return result;
 }
@@ -46,8 +78,9 @@ function querystring(query) {
  * @returns {String}
  * @api public
  */
-function querystringify(obj, prefix) {
+function querystringify(obj, prefix, eq) {
   prefix = prefix || '';
+  eq = eq || '=';
 
   var pairs = [];
 
@@ -57,10 +90,21 @@ function querystringify(obj, prefix) {
   if ('string' !== typeof prefix) prefix = '?';
 
   for (var key in obj) {
-    if (has.call(obj, key)) {
-      pairs.push(encodeURIComponent(key) +'='+ obj[key]);
+    var ks = encodeURIComponent(stringifyPrimitive(key)) + eq;
+    if (Array.isArray(obj[key])) {
+      obj[key].forEach(function(v) {
+        pairs.push(ks + stringifyPrimitive(v));
+      });
+    } else {
+      pairs.push(ks + stringifyPrimitive(obj[key]));
     }
   }
+
+  // for (var key in obj) {
+  //   if (hasOwnProperty(obj, key)) {
+  //     pairs.push(encodeURIComponent(key) +'='+ obj[key]);
+  //   }
+  // }
 
   return pairs.length ? prefix + pairs.join('&') : '';
 }
